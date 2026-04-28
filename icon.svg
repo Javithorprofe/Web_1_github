@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background -->
+  <rect width="192" height="192" rx="38" fill="#ffffff"/>
+
+  <!-- Top red bar -->
+  <rect x="0" y="0" width="192" height="54" rx="38" fill="#e8a4b8"/>
+  <rect x="0" y="28" width="192" height="26" fill="#e8a4b8"/>
+
+  <!-- Calendar rings -->
+  <rect x="54" y="8" width="12" height="28" rx="6" fill="white"/>
+  <rect x="126" y="8" width="12" height="28" rx="6" fill="white"/>
+
+  <!-- Month text -->
+  <text x="96" y="44" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="white" letter-spacing="1">JULIO</text>
+
+  <!-- Day number -->
+  <text x="96" y="148" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif" font-size="96" font-weight="700" fill="#3d2e26">18</text>
+</svg>
