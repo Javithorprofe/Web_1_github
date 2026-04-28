@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Mi Agenda</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  font-family:'Nunito',sans-serif;
+  min-height:100vh; max-width:430px; margin:0 auto;
+  padding-bottom:110px;
+  transition:background .4s, color .4s;
+}
+
+/* ── THEMES ── */
+body.light {
+  --bg:#fdf6f0; --surface:#fff; --surface2:#fef9f5;
+  --border:#f0e6dd; --text:#3d2e26; --muted:#b09a8e;
+  --accent:#e8a4b8; --accent2:#d490aa; --glow:rgba(232,164,184,.4);
+  --cal-head:linear-gradient(135deg,#fef0f5,#fef5ee);
+  --shadow:0 4px 24px rgba(180,130,110,.10);
+  --tab-on:#fff; --tab-off:#f5ede6; --tab-off-text:#c4a898;
+  background:var(--bg); color:var(--text);
+}
+body.dark {
+  --bg:#0e0e12; --surface:#16141f; --surface2:#1e1b2e;
+  --border:#2a2540; --text:#f0eaff; --muted:#6b5f80;
+  --accent:#c084fc; --accent2:#a855f7; --glow:rgba(192,132,252,.3);
+  --cal-head:linear-gradient(135deg,#1e1b2e,#161220);
+  --shadow:0 4px 28px rgba(80,40,140,.2);
+  --tab-on:#16141f; --tab-off:#0e0e12; --tab-off-text:#3d3355;
+  background:var(--bg); color:var(--text);
+}
+
+/* ── TABS ── */
+.tabs {
+  display:flex; border-bottom:1px solid var(--border);
+  background:var(--bg); position:sticky; top:0; z-index:60;
+}
+.tab {
+  flex:1; height:48px; border:none; cursor:pointer;
+  font-family:'Nunito',sans-serif; font-size:13px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  transition:background .3s,color .3s,border-bottom-color .3s;
+  background:var(--tab-off); color:var(--tab-off-text);
+  border-bottom:3px solid transparent;
+}
+.tab.on { background:var(--tab-on); color:var(--accent); border-bottom-color:var(--accent); }
+.tdot { width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.7; }
+
+/* ── VIEWS ── */
+.view { display:none; }
+.view.on { display:block; }
+
+/* ══════════════════════
+   SHARED COMPONENTS
+══════════════════════ */
+.topbar {
+  background:var(--surface); padding:16px 20px 14px;
+  border-bottom:1px solid var(--border); box-shadow:var(--shadow);
+}
+.tr1 { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.logo { font-family:'Playfair Display',serif; font-size:20px; }
+.logo em { font-style:italic; color:var(--accent); }
+.badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; background:var(--glow); color:var(--accent); }
+.btn-pill {
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:white; border:none; border-radius:50px; padding:8px 18px;
+  font-family:'Nunito',sans-serif; font-size:13px; font-weight:700; cursor:pointer;
+  box-shadow:0 3px 12px var(--glow);
+}
+.btn-pill:active { transform:scale(.96); }
+
+.mnav { display:flex; align-items:center; justify-content:space-between; }
+.mtit { font-family:'Playfair Display',serif; font-size:18px; }
+.mtit em { font-style:italic; color:var(--accent); }
+.nbtn {
+  width:30px; height:30px; border-radius:50%;
+  background:var(--surface2); border:1.5px solid var(--border);
+  color:var(--muted); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:15px;
+}
+.nbtn:active { background:var(--accent); color:white; border-color:var(--accent); }
+.todaybtn {
+  font-size:11px; padding:0 10px; border-radius:20px; height:30px;
+  background:var(--surface2); border:1.5px solid var(--border);
+  color:var(--muted); cursor:pointer; font-family:'Nunito',sans-serif; font-weight:700;
+}
+.todaybtn:active { background:var(--accent); color:white; border-color:var(--accent); }
+
+/* ══════════════════════
+   CALENDAR (view 0)
+══════════════════════ */
+.fsec { padding:10px 16px 0; }
+.ftog {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1.5px solid var(--border);
+  border-radius:12px; padding:10px 14px; cursor:pointer;
+}
+.ftog.open { border-color:var(--accent); border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom:none; }
+.ftog-l { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--text); }
+.fdots { display:flex; gap:3px; }
+.fdot { width:8px; height:8px; border-radius:50%; }
+.farr { font-size:11px; color:var(--muted); transition:transform .2s; }
+.farr.open { transform:rotate(180deg); }
+.fpanel {
+  background:var(--surface); border:1.5px solid var(--accent); border-top:none;
+  border-radius:0 0 12px 12px; overflow:hidden; max-height:0; transition:max-height .3s;
+}
+.fpanel.open { max-height:500px; }
+.finn { padding:10px 14px 14px; }
+.fhdr { display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+.fsmall { font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; }
+.btnall { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; font-family:'Nunito',sans-serif; font-weight:700; }
+.crow { display:flex; align-items:center; justify-content:space-between; padding:8px 2px; }
+.crow-l { display:flex; align-items:center; gap:10px; }
+.cdot { width:10px; height:10px; border-radius:50%; }
+.cn { font-size:14px; font-weight:500; color:var(--text); }
+.cc { font-size:11px; color:var(--muted); background:var(--bg); padding:2px 7px; border-radius:20px; margin-left:4px; }
+.crow-r { display:flex; align-items:center; gap:8px; }
+.em { background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:4px; border-radius:6px; }
+.tog { position:relative; width:38px; height:22px; cursor:pointer; display:block; }
+.tog input { display:none; }
+.tog-t { position:absolute; inset:0; background:var(--border); border-radius:20px; transition:background .2s; }
+.tog input:checked + .tog-t { background:var(--accent); }
+.tog-k { position:absolute; top:3px; left:3px; width:16px; height:16px; background:white; border-radius:50%; transition:left .2s; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+.tog input:checked ~ .tog-k { left:19px; }
+.addcat { width:100%; margin-top:10px; padding:8px; background:none; border:1.5px dashed var(--border); border-radius:8px; color:var(--muted); font-size:12px; font-family:'Nunito',sans-serif; font-weight:600; cursor:pointer; }
+.addcat:active { border-color:var(--accent); color:var(--accent); }
+
+.cwrap { padding:14px 16px 0; }
+.cbox { background:var(--surface); border-radius:18px; border:1px solid var(--border); overflow:hidden; box-shadow:var(--shadow); }
+.wdays { display:grid; grid-template-columns:repeat(7,1fr); background:var(--cal-head); border-bottom:1px solid var(--border); }
+.wd { text-align:center; padding:10px 2px; font-size:10px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
+.cdays { display:grid; grid-template-columns:repeat(7,1fr); }
+.cday { min-height:60px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); padding:5px 3px 3px; cursor:pointer; }
+.cday:nth-child(7n) { border-right:none; }
+.cday:active { background:var(--cal-head); }
+.cday.other { opacity:.3; }
+.dnum { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; margin:0 auto 3px; }
+.cday.today .dnum { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:white; box-shadow:0 2px 8px var(--glow); }
+.ddots { display:flex; flex-wrap:wrap; gap:2px; justify-content:center; }
+.evdot { width:6px; height:6px; border-radius:50%; }
+
+.upwrap { padding:16px 16px 0; }
+.stit { font-family:'Playfair Display',serif; font-size:16px; margin-bottom:12px; }
+.stit em { font-style:italic; color:var(--accent); }
+.ulist { display:flex; flex-direction:column; gap:8px; }
+.ucard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; display:flex; align-items:center; gap:12px; cursor:pointer; box-shadow:var(--shadow); }
+.ucard:active { transform:scale(.98); }
+.uline { width:4px; border-radius:4px; align-self:stretch; min-height:36px; flex-shrink:0; }
+.uinfo { flex:1; min-width:0; }
+.un { font-size:14px; font-weight:700; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.um { font-size:11px; color:var(--muted); font-weight:500; }
+.ubadge { font-size:10px; padding:3px 9px; border-radius:20px; font-weight:700; white-space:nowrap; }
+.empty { text-align:center; color:var(--muted); font-size:13px; padding:28px; font-style:italic; }
+
+/* ══════════════════════
+   HABIT TRACKER (view 1)
+══════════════════════ */
+
+/* Week nav bar */
+.week-nav-bar {
+  display:flex; align-items:center; gap:8px;
+  padding:0 6px;
+}
+.wnav-btn {
+  width:28px; height:28px; border-radius:50%;
+  background:var(--surface2); border:1.5px solid var(--border);
+  color:var(--muted); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:14px;
+  flex-shrink:0;
+}
+.wnav-btn:active { background:var(--accent); color:white; border-color:var(--accent); }
+.wnav-label { font-size:12px; font-weight:600; color:var(--muted); flex:1; text-align:center; }
+.wnav-today {
+  font-size:11px; padding:0 10px; border-radius:20px; height:26px;
+  background:var(--surface2); border:1.5px solid var(--border);
+  color:var(--muted); cursor:pointer; font-family:'Nunito',sans-serif; font-weight:700;
+  white-space:nowrap; flex-shrink:0; display:none;
+}
+.wnav-today.vis { display:block; }
+.wnav-today:active { background:var(--accent); color:white; border-color:var(--accent); }
+
+/* Week strip */
+.week-strip-wrap {
+  padding:12px 16px 0;
+}
+.week-strip {
+  display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+}
+
+.wday-col {
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  cursor:pointer; padding:6px 2px 8px; border-radius:14px;
+  border:1.5px solid transparent;
+  transition:background .15s, border-color .15s;
+  position:relative;
+}
+.wday-col:active { background:var(--surface2); }
+.wday-col.selected {
+  background:var(--surface2);
+  border-color:var(--accent);
+}
+
+.wdlabel { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+
+.wdnum-wrap {
+  width:30px; height:30px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:var(--text);
+  transition:background .2s;
+}
+.wday-col.is-today .wdnum-wrap {
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:white;
+  box-shadow:0 2px 8px var(--glow);
+}
+
+/* Habit dots under each day in the strip */
+.wday-hab-dots {
+  display:flex; flex-wrap:wrap; justify-content:center; gap:2px;
+  min-height:8px; max-width:34px;
+}
+.wday-hab-dot {
+  width:7px; height:7px; border-radius:2px;
+  transition:opacity .15s;
+}
+.wday-hab-dot.done { opacity:1; }
+.wday-hab-dot.todo { opacity:.25; }
+
+/* Stats */
+.hstats {
+  margin:12px 16px 0; padding:12px 14px;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  display:flex;
+}
+.hstat { flex:1; text-align:center; }
+.hstat + .hstat { border-left:1px solid var(--border); }
+.hstat-v { font-size:20px; font-weight:700; color:var(--accent); font-family:'Playfair Display',serif; }
+.hstat-l { font-size:9px; color:var(--muted); font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-top:2px; }
+
+/* Habit list */
+.hlist { padding:14px 16px 0; display:flex; flex-direction:column; gap:10px; }
+
+.hcard {
+  border-radius:16px; padding:13px 14px;
+  display:flex; align-items:center; gap:10px;
+  border:1px solid; cursor:default;
+  position:relative;
+}
+
+.hcard-accent { width:5px; border-radius:5px; align-self:stretch; min-height:38px; flex-shrink:0; }
+.hcard-info { flex:1; min-width:0; }
+.hcard-name { font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
+.hcard-freq { font-size:11px; color:var(--muted); }
+
+/* The big toggle square for selected day */
+.hcard-check {
+  width:36px; height:36px; border-radius:10px;
+  border:2.5px solid; cursor:pointer; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; font-weight:700;
+  transition:background .15s, transform .1s;
+}
+.hcard-check:active { transform:scale(.86); }
+.hcard-check.done { color:white; }
+.hcard-check.todo { background:transparent !important; }
+
+.hcard-edit { background:none; border:none; color:var(--muted); font-size:17px; cursor:pointer; padding:2px 5px; border-radius:6px; flex-shrink:0; }
+.hcard-edit:active { background:var(--border); }
+
+
+
+/* FAB */
+.fab {
+  position:fixed; bottom:28px; right:50%; transform:translateX(195px);
+  width:56px; height:56px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none; border-radius:50%; color:white; font-size:26px; cursor:pointer;
+  box-shadow:0 6px 20px var(--glow);
+  display:flex; align-items:center; justify-content:center; z-index:40;
+}
+.fab:active { transform:translateX(195px) scale(.92); }
+@media(max-width:430px){ .fab{transform:none;right:20px;} .fab:active{transform:scale(.92);} }
+
+/* ── MODALS ── */
+.overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.5);
+  backdrop-filter:blur(8px);
+  display:flex; align-items:flex-end; justify-content:center;
+  z-index:100; opacity:0; pointer-events:none; transition:opacity .25s;
+}
+.overlay.open { opacity:1; pointer-events:all; }
+.modal {
+  background:var(--surface); border-radius:24px 24px 0 0;
+  padding:20px 20px 36px; width:100%; max-width:430px;
+  transform:translateY(100%);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  max-height:90vh; overflow-y:auto;
+}
+.overlay.open .modal { transform:translateY(0); }
+.mh { width:40px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 18px; }
+.mtit2 { font-family:'Playfair Display',serif; font-size:20px; margin-bottom:20px; color:var(--text); }
+.mtit2 em { font-style:italic; color:var(--accent); }
+.fg { margin-bottom:14px; }
+.fl { display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:6px; letter-spacing:.8px; text-transform:uppercase; }
+.fi {
+  width:100%; padding:12px 14px; background:var(--bg); border:1.5px solid var(--border);
+  border-radius:12px; color:var(--text); font-family:'Nunito',sans-serif; font-size:15px; font-weight:500;
+  -webkit-appearance:none;
+}
+.fi:focus { outline:none; border-color:var(--accent); }
+.mbtns { display:flex; gap:10px; margin-top:20px; }
+.bcnc { flex:1; padding:13px; background:var(--surface2); border:1.5px solid var(--border); border-radius:12px; color:var(--muted); font-family:'Nunito',sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
+.bsav { flex:2; padding:13px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:12px; color:white; font-family:'Nunito',sans-serif; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 3px 12px var(--glow); }
+.bdel { flex:1; padding:13px; background:var(--surface2); border:1.5px solid var(--border); border-radius:12px; color:#e06060; font-family:'Nunito',sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
+.cgrid { display:flex; flex-wrap:wrap; gap:10px; padding:4px 0; }
+.csw { width:32px; height:32px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:transform .15s; box-shadow:0 2px 6px rgba(0,0,0,.2); }
+.csw:active { transform:scale(1.2); }
+.csw.sel { border-color:var(--text); }
+.fgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.fopt {
+  padding:10px 12px; border-radius:12px; border:1.5px solid var(--border);
+  background:var(--bg); cursor:pointer; text-align:center;
+  font-size:13px; font-weight:600; color:var(--text); font-family:'Nunito',sans-serif;
+}
+.fopt.sel { border-color:var(--accent); background:var(--glow); color:var(--accent); }
+.xrow { display:flex; align-items:center; gap:10px; margin-top:8px; }
+.xlabel { font-size:13px; color:var(--muted); white-space:nowrap; }
+</style>
+</head>
+<body class="light">
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab on" id="tab0" onclick="switchTab(0)">
+    <div class="tdot"></div><span>Mi agenda</span>
+  </button>
+  <button class="tab" id="tab1" onclick="switchTab(1)">
+    <div class="tdot"></div><span>Mis metas</span>
+  </button>
+</div>
+
+<!-- ══ VIEW 0: CALENDAR ══ -->
+<div class="view on" id="view0">
+  <div class="topbar">
+    <div class="tr1">
+      <div class="logo">mi <em>agenda</em></div>
+      <div class="badge">Personal</div>
+    </div>
+    <div class="mnav">
+      <div style="display:flex;gap:6px">
+        <button class="nbtn" onclick="cPrev()">‹</button>
+        <button class="nbtn" onclick="cNext()">›</button>
+      </div>
+      <div class="mtit" id="cTitle"></div>
+      <button class="todaybtn" onclick="cToday()">Hoy</button>
+    </div>
+  </div>
+
+  <div class="fsec">
+    <div class="ftog" id="ftog" onclick="toggleFilter()">
+      <div class="ftog-l"><div class="fdots" id="fdots"></div><span id="flabel">Categorías</span></div>
+      <div class="farr" id="farr">▼</div>
+    </div>
+    <div class="fpanel" id="fpanel">
+      <div class="finn">
+        <div class="fhdr"><div class="fsmall">Mostrar</div><button class="btnall" onclick="allCats()">Marcar todas</button></div>
+        <div id="catList"></div>
+        <button class="addcat" onclick="openNewCat()">+ Nueva categoría</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cwrap">
+    <div class="cbox">
+      <div class="wdays"><div class="wd">L</div><div class="wd">M</div><div class="wd">X</div><div class="wd">J</div><div class="wd">V</div><div class="wd">S</div><div class="wd">D</div></div>
+      <div class="cdays" id="cDays"></div>
+    </div>
+  </div>
+
+  <div class="upwrap" style="margin-top:16px">
+    <div class="stit">Próximos <em>eventos</em></div>
+    <div class="ulist" id="uList"></div>
+  </div>
+</div>
+
+<!-- ══ VIEW 1: HABITS ══ -->
+<div class="view" id="view1">
+  <div class="topbar">
+    <div class="tr1">
+      <div class="logo">mis <em>metas</em></div>
+      <div class="badge">Hábitos</div>
+    </div>
+    <!-- Week nav -->
+    <div class="week-nav-bar">
+      <button class="wnav-btn" onclick="hPrevWeek()">‹</button>
+      <div class="wnav-label" id="wnavLabel"></div>
+      <button class="wnav-today vis" id="wnavToday" onclick="hGoToday()">Hoy</button>
+      <button class="wnav-btn" onclick="hNextWeek()">›</button>
+    </div>
+  </div>
+
+  <!-- Week strip -->
+  <div class="week-strip-wrap">
+    <div class="week-strip" id="weekStrip"></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="hstats" id="hStats"></div>
+
+  <!-- Habit list -->
+  <div class="hlist" id="hList"></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="fabClick()">+</button>
+
+<!-- MODAL: event -->
+<div class="overlay" id="evModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mtit2" id="evTitle">Nuevo <em>evento</em></div>
+    <div class="fg"><label class="fl">Título</label><input class="fi" id="evT" placeholder="¿Qué tienes planeado?"></div>
+    <div class="fg"><label class="fl">Fecha</label><input type="date" class="fi" id="evD"></div>
+    <div class="fg"><label class="fl">Hora (opcional)</label><input type="time" class="fi" id="evH"></div>
+    <div class="fg"><label class="fl">Categoría</label><select class="fi" id="evC"></select></div>
+    <div class="fg"><label class="fl">Notas (opcional)</label><input class="fi" id="evN" placeholder="Añade una nota..."></div>
+    <div class="mbtns"><button class="bcnc" onclick="closeM('evModal')">Cancelar</button><button class="bsav" onclick="saveEvent()">Guardar ✓</button></div>
+  </div>
+</div>
+
+<!-- MODAL: cat -->
+<div class="overlay" id="catModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mtit2" id="catTitle">Nueva <em>categoría</em></div>
+    <div class="fg"><label class="fl">Nombre</label><input class="fi" id="cName" placeholder="Ej: Trabajo, Gym, Amigas..."></div>
+    <div class="fg"><label class="fl">Color</label><div class="cgrid" id="cColors"></div></div>
+    <div class="mbtns"><button class="bcnc" onclick="closeM('catModal')">Cancelar</button><button class="bsav" onclick="saveCat()">Guardar ✓</button></div>
+  </div>
+</div>
+
+<!-- MODAL: event detail -->
+<div class="overlay" id="detModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div id="dbar" style="height:5px;border-radius:4px;margin-bottom:16px"></div>
+    <div id="dtit" style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:14px;color:var(--text)"></div>
+    <div id="dbody"></div>
+    <div class="mbtns"><button class="bdel" onclick="delEvent()">Borrar</button><button class="bcnc" onclick="closeM('detModal')">Cerrar</button><button class="bsav" onclick="editEv()">Editar</button></div>
+  </div>
+</div>
+
+<!-- MODAL: habit -->
+<div class="overlay" id="habModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mtit2" id="habTitle">Nuevo <em>hábito</em></div>
+    <div class="fg"><label class="fl">Nombre</label><input class="fi" id="hName" placeholder="Ej: Beber agua, Gym, Meditar..."></div>
+    <div class="fg">
+      <label class="fl">Frecuencia</label>
+      <div class="fgrid">
+        <button class="fopt sel" data-freq="daily" onclick="setFreq(this)">Cada día</button>
+        <button class="fopt" data-freq="weekly" onclick="setFreq(this)">Cada semana</button>
+        <button class="fopt" data-freq="xdays" onclick="setFreq(this)">Cada X días</button>
+        <button class="fopt" data-freq="monthly" onclick="setFreq(this)">Cada mes</button>
+      </div>
+      <div class="xrow" id="xrow" style="display:none">
+        <input type="number" class="fi" id="hX" placeholder="3" min="2" max="30" style="max-width:80px">
+        <div class="xlabel">días entre cada vez</div>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Color</label><div class="cgrid" id="hColors"></div></div>
+    <div class="mbtns" id="habBtns">
+      <button class="bcnc" onclick="closeM('habModal')">Cancelar</button>
+      <button class="bsav" onclick="saveHabit()">Guardar ✓</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────
+//  CONSTANTS
+// ─────────────────────────
+const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAYS=['lun','mar','mié','jue','vie','sáb','dom'];
+const CL=['#f4a7b9','#f9c9a3','#a8d8ea','#b5ead7','#e2c4f0','#ffd6a5','#caffbf','#9bf6ff','#ffc6ff','#ffadad','#d4a5a5','#a5c4d4'];
+const CD=['#c084fc','#818cf8','#f472b6','#34d399','#fb7185','#a78bfa','#60a5fa','#f59e0b','#e879f9','#10b981','#f43f5e','#6366f1'];
+
+const tds=()=>new Date().toISOString().split('T')[0];
+const addD=(n)=>{ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; };
+const pd=(s)=>{ const[y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const ds=(d)=>d.toISOString().split('T')[0];
+const darken=(h)=>`rgb(${Math.max(0,parseInt(h.slice(1,3),16)-55)},${Math.max(0,parseInt(h.slice(3,5),16)-55)},${Math.max(0,parseInt(h.slice(5,7),16)-55)})`;
+
+function freqLabel(h){
+  return h.freq==='daily'?'Cada día':h.freq==='weekly'?'Cada semana':h.freq==='monthly'?'Cada mes':`Cada ${h.xdays} días`;
+}
+
+function isActive(h,dateStr){
+  if(!h.createdAt||dateStr<h.createdAt) return false;
+  if(h.freq==='daily') return true;
+  const sd=pd(h.createdAt), cd=pd(dateStr);
+  const diff=Math.round((cd-sd)/86400000);
+  if(h.freq==='weekly') return diff>=0&&diff%7===0;
+  if(h.freq==='monthly') return cd.getDate()===sd.getDate();
+  if(h.freq==='xdays') return diff>=0&&diff%h.xdays===0;
+  return false;
+}
+
+// ─────────────────────────
+//  STATE
+// ─────────────────────────
+let S={
+  tab:0,
+  cal:{
+    year:new Date().getFullYear(), month:new Date().getMonth(),
+    cats:[
+      {id:'trabajo',name:'Trabajo',color:'#a8d8ea',visible:true},
+      {id:'ocio',name:'Ocio',color:'#f4a7b9',visible:true},
+      {id:'salud',name:'Salud',color:'#b5ead7',visible:true},
+    ],
+    evs:[
+      {id:'e1',title:'Reunión de equipo',date:tds(),time:'10:00',cat:'trabajo',notes:''},
+      {id:'e2',title:'Cena con amigas',date:addD(3),time:'21:00',cat:'ocio',notes:'¡Reservar sitio!'},
+      {id:'e3',title:'Pilates',date:addD(5),time:'09:00',cat:'salud',notes:''},
+    ],
+    fOpen:false, editEvId:null, editCatId:null, viewEvId:null, selColor:null,
+  },
+  hab:{
+    habits:[
+      {id:'h1',name:'Beber 2L agua',freq:'daily',color:'#60a5fa',xdays:1,createdAt:addD(-14)},
+      {id:'h2',name:'Gym',freq:'xdays',color:'#c084fc',xdays:2,createdAt:addD(-14)},
+      {id:'h3',name:'Meditar',freq:'daily',color:'#34d399',xdays:1,createdAt:addD(-7)},
+    ],
+    logs:{},
+    weekOff:0,   // week offset from current
+    selDay:tds(), // currently selected day
+    selFreq:'daily', selColor:CD[0], editId:null,
+  }
+};
+
+function save(){ localStorage.setItem('v4',JSON.stringify({cal:{cats:S.cal.cats,evs:S.cal.evs},hab:{habits:S.hab.habits,logs:S.hab.logs}})); }
+function load(){
+  try{
+    const d=localStorage.getItem('v4');
+    if(d){const p=JSON.parse(d);if(p.cal){S.cal.cats=p.cal.cats;S.cal.evs=p.cal.evs;}if(p.hab){S.hab.habits=p.hab.habits;S.hab.logs=p.hab.logs||{};}}
+  }catch(e){}
+}
+
+// ─────────────────────────
+//  TAB SWITCH
+// ─────────────────────────
+function switchTab(i){
+  S.tab=i;
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('on',j===i));
+  document.querySelectorAll('.view').forEach((v,j)=>v.classList.toggle('on',j===i));
+  document.body.className=i===0?'light':'dark';
+}
+
+function fabClick(){ S.tab===0?openEventModal():openHabModal(); }
+
+// ─────────────────────────
+//  CALENDAR
+// ─────────────────────────
+function renderCalendar(){
+  document.getElementById('cTitle').innerHTML=`<em>${MONTHS[S.cal.month]}</em> ${S.cal.year}`;
+  renderCatFilter(); renderCGrid(); renderUpcoming();
+}
+
+function renderCatFilter(){
+  const vis=S.cal.cats.filter(c=>c.visible);
+  document.getElementById('fdots').innerHTML=vis.slice(0,5).map(c=>`<div class="fdot" style="background:${c.color}"></div>`).join('');
+  const n=vis.length,t=S.cal.cats.length;
+  document.getElementById('flabel').textContent=n===t?'Todas las categorías':`${n} de ${t} visibles`;
+  document.getElementById('catList').innerHTML=S.cal.cats.map(c=>{
+    const cnt=S.cal.evs.filter(e=>e.cat===c.id).length;
+    return`<div class="crow"><div class="crow-l"><div class="cdot" style="background:${c.color}"></div><div class="cn">${c.name}</div><div class="cc">${cnt}</div></div><div class="crow-r"><button class="em" onclick="openEditCat('${c.id}')">✎</button><label class="tog"><input type="checkbox" ${c.visible?'checked':''} onchange="togCat('${c.id}',this.checked)"><div class="tog-t"></div><div class="tog-k"></div></label></div></div>`;
+  }).join('');
+}
+
+function visEvs(){
+  const vc=new Set(S.cal.cats.filter(c=>c.visible).map(c=>c.id));
+  return S.cal.evs.filter(e=>vc.has(e.cat));
+}
+
+function renderCGrid(){
+  const fd=new Date(S.cal.year,S.cal.month,1),ld=new Date(S.cal.year,S.cal.month+1,0);
+  const td=tds(),ve=visEvs();
+  let dow=fd.getDay(); dow=dow===0?6:dow-1;
+  let h='';
+  for(let i=dow-1;i>=0;i--) h+=cCell(new Date(S.cal.year,S.cal.month,-i),true,ve,td);
+  for(let d=1;d<=ld.getDate();d++) h+=cCell(new Date(S.cal.year,S.cal.month,d),false,ve,td);
+  const tot=Math.ceil((dow+ld.getDate())/7)*7;
+  for(let d=1;d<=tot-dow-ld.getDate();d++) h+=cCell(new Date(S.cal.year,S.cal.month+1,d),true,ve,td);
+  document.getElementById('cDays').innerHTML=h;
+}
+
+function cCell(date,other,ve,td){
+  const dstr=ds(date),isT=dstr===td;
+  const evs=ve.filter(e=>e.date===dstr);
+  const dots=evs.slice(0,4).map(ev=>{ const c=S.cal.cats.find(c=>c.id===ev.cat); return`<div class="evdot" style="background:${c?c.color:'#aaa'}"></div>`; }).join('');
+  return`<div class="cday${other?' other':''}${isT?' today':''}" onclick="onCDay('${dstr}')"><div class="dnum">${date.getDate()}</div><div class="ddots">${dots}</div></div>`;
+}
+
+function renderUpcoming(){
+  const td=tds();
+  const up=visEvs().filter(e=>e.date>=td).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
+  const el=document.getElementById('uList');
+  if(!up.length){ el.innerHTML='<div class="empty">Nada en el horizonte 🌸</div>'; return; }
+  el.innerHTML=up.map(ev=>{
+    const c=S.cal.cats.find(c=>c.id===ev.cat),col=c?c.color:'#aaa';
+    const d=pd(ev.date),dl=d.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'});
+    return`<div class="ucard" onclick="openEvDetail('${ev.id}')"><div class="uline" style="background:${col}"></div><div class="uinfo"><div class="un">${ev.title}</div><div class="um">${dl}${ev.time?' · '+ev.time:''}</div></div><div class="ubadge" style="background:${col}33;color:${darken(col)}">${c?c.name:''}</div></div>`;
+  }).join('');
+}
+
+function cPrev(){ S.cal.month--; if(S.cal.month<0){S.cal.month=11;S.cal.year--;} renderCalendar(); }
+function cNext(){ S.cal.month++; if(S.cal.month>11){S.cal.month=0;S.cal.year++;} renderCalendar(); }
+function cToday(){ const n=new Date(); S.cal.year=n.getFullYear(); S.cal.month=n.getMonth(); renderCalendar(); }
+function onCDay(dstr){ if(S.cal.fOpen){toggleFilter();return;} openEventModal(dstr); }
+
+function toggleFilter(){
+  S.cal.fOpen=!S.cal.fOpen;
+  document.getElementById('fpanel').classList.toggle('open',S.cal.fOpen);
+  document.getElementById('ftog').classList.toggle('open',S.cal.fOpen);
+  document.getElementById('farr').classList.toggle('open',S.cal.fOpen);
+}
+function allCats(){ const a=S.cal.cats.every(c=>c.visible); S.cal.cats.forEach(c=>c.visible=!a); save(); renderCatFilter(); renderCGrid(); renderUpcoming(); }
+function togCat(id,v){ const c=S.cal.cats.find(c=>c.id===id); if(c) c.visible=v; save(); renderCatFilter(); renderCGrid(); renderUpcoming(); }
+
+// ─────────────────────────
+//  HABITS
+// ─────────────────────────
+function getWeekDates(){
+  const now=new Date();
+  const dow=now.getDay()===0?6:now.getDay()-1;
+  const mon=new Date(now); mon.setDate(now.getDate()-dow+S.hab.weekOff*7);
+  return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return ds(d); });
+}
+
+function renderHabits(){
+  const dates=getWeekDates();
+  const today=tds();
+  const isCurrentWeek=S.hab.weekOff===0;
+
+  // Week nav label
+  const first=pd(dates[0]),last=pd(dates[6]);
+  const label=first.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' – '+last.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'});
+  document.getElementById('wnavLabel').textContent=label;
+  const todayBtn=document.getElementById('wnavToday');
+  todayBtn.classList.toggle('vis',!isCurrentWeek);
+
+  // If selected day not in current week range, reset to first day of week shown (or today if current week)
+  if(!dates.includes(S.hab.selDay)){
+    S.hab.selDay=isCurrentWeek?today:dates[0];
+  }
+
+  // ── Week strip ──
+  const strip=document.getElementById('weekStrip');
+  strip.innerHTML=dates.map(dstr=>{
+    const d=pd(dstr);
+    const isT=dstr===today;
+    const isSel=dstr===S.hab.selDay;
+
+    // Habit dots for this day
+    const dots=S.hab.habits.map(h=>{
+      const active=isActive(h,dstr);
+      if(!active) return '';
+      const done=S.hab.logs[h.id+'_'+dstr]||false;
+      return`<div class="wday-hab-dot ${done?'done':'todo'}" style="background:${h.color}"></div>`;
+    }).join('');
+
+    return`<div class="wday-col${isT?' is-today':''}${isSel?' selected':''}" onclick="selectDay('${dstr}')">
+      <div class="wdlabel">${DAYS[dates.indexOf(dstr)]}</div>
+      <div class="wdnum-wrap">${d.getDate()}</div>
+      <div class="wday-hab-dots">${dots}</div>
+    </div>`;
+  }).join('');
+
+  // ── Stats for selected day ──
+  let done=0,total=0;
+  S.hab.habits.forEach(h=>{
+    if(isActive(h,S.hab.selDay)){
+      total++;
+      if(S.hab.logs[h.id+'_'+S.hab.selDay]) done++;
+    }
+  });
+  const pct=total>0?Math.round(done/total*100):0;
+  const selLabel=pd(S.hab.selDay).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'});
+  document.getElementById('hStats').innerHTML=`
+    <div class="hstat"><div class="hstat-v">${done}</div><div class="hstat-l">Hechos</div></div>
+    <div class="hstat"><div class="hstat-v">${total-done}</div><div class="hstat-l">Pendientes</div></div>
+    <div class="hstat"><div class="hstat-v">${pct}%</div><div class="hstat-l">${selLabel}</div></div>
+  `;
+
+  // ── Habit cards ──
+  const el=document.getElementById('hList');
+  if(!S.hab.habits.length){ el.innerHTML='<div class="empty" style="padding:40px">Añade tu primer hábito ✨</div>'; return; }
+
+  const isFuture=S.hab.selDay>today;
+
+  const activeHabits=S.hab.habits.filter(h=>isActive(h,S.hab.selDay));
+
+  if(!activeHabits.length){
+    el.innerHTML='<div class="empty" style="padding:32px">Sin hábitos para este día ✨</div>';
+    return;
+  }
+
+  el.innerHTML=activeHabits.map(h=>{
+    const key=h.id+'_'+S.hab.selDay;
+    const done=S.hab.logs[key]||false;
+    const col=h.color;
+    const checkStyle=done?`background:${col};border-color:${col}`:`border-color:${col}`;
+
+    return`<div class="hcard" style="background:${col}15;border-color:${col}2a">
+      <div class="hcard-accent" style="background:${col}"></div>
+      <div class="hcard-info">
+        <div class="hcard-name">${h.name}</div>
+        <div class="hcard-freq">${freqLabel(h)}</div>
+      </div>
+      <div class="hcard-check ${done?'done':'todo'}" style="${checkStyle}" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}')`:''}">${done?'✓':''}</div>
+      <button class="hcard-edit" onclick="openEditHabit('${h.id}')">⋯</button>
+    </div>`;
+  }).join('');
+}
+
+function selectDay(dstr){
+  S.hab.selDay=dstr;
+  renderHabits();
+}
+
+function toggleLog(habId,dstr){
+  const key=habId+'_'+dstr;
+  S.hab.logs[key]=!S.hab.logs[key];
+  if(!S.hab.logs[key]) delete S.hab.logs[key];
+  save(); renderHabits();
+}
+
+function hPrevWeek(){ S.hab.weekOff--; renderHabits(); }
+function hNextWeek(){ S.hab.weekOff++; renderHabits(); }
+function hGoToday(){ S.hab.weekOff=0; S.hab.selDay=tds(); renderHabits(); }
+
+// ─────────────────────────
+//  EVENT MODAL
+// ─────────────────────────
+function openEventModal(dstr){
+  S.cal.editEvId=null;
+  document.getElementById('evTitle').innerHTML='Nuevo <em>evento</em>';
+  document.getElementById('evT').value='';
+  document.getElementById('evD').value=dstr||tds();
+  document.getElementById('evH').value='';
+  document.getElementById('evN').value='';
+  document.getElementById('evC').innerHTML=S.cal.cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  openM('evModal');
+}
+function saveEvent(){
+  const title=document.getElementById('evT').value.trim(),date=document.getElementById('evD').value;
+  if(!title||!date) return;
+  const ev={id:S.cal.editEvId||'e'+Date.now(),title,date,time:document.getElementById('evH').value,cat:document.getElementById('evC').value,notes:document.getElementById('evN').value.trim()};
+  if(S.cal.editEvId){ const i=S.cal.evs.findIndex(e=>e.id===S.cal.editEvId); if(i>-1) S.cal.evs[i]=ev; } else S.cal.evs.push(ev);
+  save(); closeM('evModal'); renderCalendar();
+}
+function openEvDetail(id){
+  S.cal.viewEvId=id;
+  const ev=S.cal.evs.find(e=>e.id===id); if(!ev) return;
+  const c=S.cal.cats.find(c=>c.id===ev.cat),col=c?c.color:'#aaa';
+  const d=pd(ev.date),dl=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('dbar').style.background=`linear-gradient(90deg,${col},${col}66)`;
+  document.getElementById('dtit').textContent=ev.title;
+  document.getElementById('dbody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📅 <span style="color:var(--text);font-weight:600">${dl}</span></div>
+    ${ev.time?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🕐 <span style="color:var(--text);font-weight:600">${ev.time}</span></div>`:''}
+    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🏷️ <span style="color:var(--text);font-weight:600">${c?c.name:'Sin categoría'}</span></div>
+    ${ev.notes?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📝 <span style="color:var(--text);font-weight:600">${ev.notes}</span></div>`:''}
+  `;
+  openM('detModal');
+}
+function delEvent(){ S.cal.evs=S.cal.evs.filter(e=>e.id!==S.cal.viewEvId); save(); closeM('detModal'); renderCalendar(); }
+function editEv(){
+  const ev=S.cal.evs.find(e=>e.id===S.cal.viewEvId); if(!ev) return;
+  closeM('detModal'); S.cal.editEvId=ev.id;
+  document.getElementById('evTitle').innerHTML='Editar <em>evento</em>';
+  document.getElementById('evT').value=ev.title; document.getElementById('evD').value=ev.date;
+  document.getElementById('evH').value=ev.time||''; document.getElementById('evN').value=ev.notes||'';
+  document.getElementById('evC').innerHTML=S.cal.cats.map(c=>`<option value="${c.id}"${c.id===ev.cat?' selected':''}>${c.name}</option>`).join('');
+  openM('evModal');
+}
+
+// ─────────────────────────
+//  CAT MODAL
+// ─────────────────────────
+function openNewCat(){
+  if(S.cal.fOpen) toggleFilter();
+  S.cal.editCatId=null; S.cal.selColor=CL[0];
+  setTimeout(()=>{ document.getElementById('catTitle').innerHTML='Nueva <em>categoría</em>'; document.getElementById('cName').value=''; renderCatColors(); openM('catModal'); },200);
+}
+function openEditCat(id){
+  const c=S.cal.cats.find(c=>c.id===id); if(!c) return;
+  S.cal.editCatId=id; S.cal.selColor=c.color;
+  document.getElementById('catTitle').innerHTML='Editar <em>categoría</em>'; document.getElementById('cName').value=c.name;
+  renderCatColors(); openM('catModal');
+}
+function renderCatColors(){ document.getElementById('cColors').innerHTML=CL.map(c=>`<div class="csw${c===S.cal.selColor?' sel':''}" style="background:${c}" onclick="selCC('${c}')"></div>`).join(''); }
+function selCC(c){ S.cal.selColor=c; renderCatColors(); }
+function saveCat(){
+  const name=document.getElementById('cName').value.trim(); if(!name) return;
+  if(S.cal.editCatId){ const c=S.cal.cats.find(c=>c.id===S.cal.editCatId); if(c){c.name=name;c.color=S.cal.selColor;} }
+  else S.cal.cats.push({id:'c'+Date.now(),name,color:S.cal.selColor,visible:true});
+  save(); closeM('catModal'); renderCalendar();
+}
+
+// ─────────────────────────
+//  HABIT MODAL
+// ─────────────────────────
+function openHabModal(){
+  S.hab.editId=null; S.hab.selFreq='daily'; S.hab.selColor=CD[0];
+  document.getElementById('habTitle').innerHTML='Nuevo <em>hábito</em>';
+  document.getElementById('hName').value=''; document.getElementById('hX').value='';
+  document.getElementById('xrow').style.display='none';
+  document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b.dataset.freq==='daily'));
+  document.getElementById('habBtns').innerHTML=`<button class="bcnc" onclick="closeM('habModal')">Cancelar</button><button class="bsav" onclick="saveHabit()">Guardar ✓</button>`;
+  renderHabColors(); openM('habModal');
+}
+function openEditHabit(id){
+  const h=S.hab.habits.find(h=>h.id===id); if(!h) return;
+  S.hab.editId=id; S.hab.selFreq=h.freq; S.hab.selColor=h.color;
+  document.getElementById('habTitle').innerHTML='Editar <em>hábito</em>'; document.getElementById('hName').value=h.name;
+  document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b.dataset.freq===h.freq));
+  document.getElementById('xrow').style.display=h.freq==='xdays'?'flex':'none';
+  if(h.freq==='xdays') document.getElementById('hX').value=h.xdays||2;
+  document.getElementById('habBtns').innerHTML=`<button class="bdel" onclick="delHabit('${id}')">Borrar</button><button class="bcnc" onclick="closeM('habModal')">Cancelar</button><button class="bsav" onclick="saveHabit()">Guardar ✓</button>`;
+  renderHabColors(); openM('habModal');
+}
+function setFreq(btn){
+  S.hab.selFreq=btn.dataset.freq;
+  document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b===btn));
+  document.getElementById('xrow').style.display=S.hab.selFreq==='xdays'?'flex':'none';
+}
+function renderHabColors(){ document.getElementById('hColors').innerHTML=CD.map(c=>`<div class="csw${c===S.hab.selColor?' sel':''}" style="background:${c}" onclick="selHC('${c}')"></div>`).join(''); }
+function selHC(c){ S.hab.selColor=c; renderHabColors(); }
+function saveHabit(){
+  const name=document.getElementById('hName').value.trim(); if(!name) return;
+  const xd=parseInt(document.getElementById('hX').value)||2;
+  const existing=S.hab.editId?S.hab.habits.find(h=>h.id===S.hab.editId):null;
+  const h={id:S.hab.editId||'h'+Date.now(),name,freq:S.hab.selFreq,color:S.hab.selColor,xdays:S.hab.selFreq==='xdays'?xd:1,createdAt:existing?existing.createdAt:tds()};
+  if(S.hab.editId){ const i=S.hab.habits.findIndex(h=>h.id===S.hab.editId); if(i>-1) S.hab.habits[i]=h; } else S.hab.habits.push(h);
+  save(); closeM('habModal'); renderHabits();
+}
+function delHabit(id){
+  S.hab.habits=S.hab.habits.filter(h=>h.id!==id);
+  Object.keys(S.hab.logs).forEach(k=>{ if(k.startsWith(id+'_')) delete S.hab.logs[k]; });
+  save(); closeM('habModal'); renderHabits();
+}
+
+// ─────────────────────────
+//  MODAL HELPERS
+// ─────────────────────────
+function openM(id){ document.getElementById(id).classList.add('open'); }
+function closeM(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
+
+// ─────────────────────────
+//  INIT
+// ─────────────────────────
+load();
+renderCalendar();
+renderHabits();
+</script>
+</body>
+</html>
