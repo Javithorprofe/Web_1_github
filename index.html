@@ -391,6 +391,7 @@ body.dark {
         <div class="fhdr"><div class="fsmall">Mostrar</div><button class="btnall" onclick="allCats()">Marcar todas</button></div>
         <div id="catList"></div>
         <button class="addcat" onclick="openNewCat()">+ Nueva categoría</button>
+        <button class="addcat" style="margin-top:6px;border-color:#ff8a80;color:#ff8a80" onclick="toggleFilter();setTimeout(()=>openHolidayModal(),200)">🗓 Festivos de España</button>
       </div>
     </div>
   </div>
@@ -493,6 +494,45 @@ body.dark {
   </div>
 </div>
 
+
+<!-- MODAL: holidays -->
+<div class="overlay" id="holidayModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mtit2">Festivos <em>España</em></div>
+    <div class="fg">
+      <label class="fl">Comunidad autónoma</label>
+      <select class="fi" id="ccaaSelect">
+        <option value="">— Sin festivos —</option>
+        <option value="andalucia">Andalucía</option>
+        <option value="aragon">Aragón</option>
+        <option value="asturias">Asturias</option>
+        <option value="baleares">Illes Balears</option>
+        <option value="canarias">Canarias</option>
+        <option value="cantabria">Cantabria</option>
+        <option value="castilla_leon">Castilla y León</option>
+        <option value="castilla_mancha">Castilla-La Mancha</option>
+        <option value="cataluna">Cataluña</option>
+        <option value="extremadura">Extremadura</option>
+        <option value="galicia">Galicia</option>
+        <option value="madrid">Comunidad de Madrid</option>
+        <option value="murcia">Región de Murcia</option>
+        <option value="navarra">Navarra</option>
+        <option value="pais_vasco">País Vasco</option>
+        <option value="la_rioja">La Rioja</option>
+        <option value="valencia">C. Valenciana</option>
+        <option value="ceuta">Ceuta</option>
+        <option value="melilla">Melilla</option>
+      </select>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:-6px;margin-bottom:4px">Incluye festivos nacionales + los de tu comunidad para 2025 y 2026.</p>
+    <div class="mbtns">
+      <button class="bcnc" onclick="closeM('holidayModal')">Cancelar</button>
+      <button class="bsav" onclick="saveHolidays()">Cargar festivos ✓</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: habit -->
 <div class="overlay" id="habModal">
   <div class="modal">
@@ -545,8 +585,8 @@ const CD=['#c084fc','#818cf8','#f472b6','#34d399','#fb7185','#a78bfa','#60a5fa',
 
 const tds=()=>new Date().toISOString().split('T')[0];
 const addD=(n)=>{ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; };
-const pd=(s)=>{ const[y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
-const ds=(d)=>d.toISOString().split('T')[0];
+const pd=(s)=>{ const[y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d,12,0,0); };
+const ds=(d)=>{ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
 const darken=(h)=>`rgb(${Math.max(0,parseInt(h.slice(1,3),16)-55)},${Math.max(0,parseInt(h.slice(3,5),16)-55)},${Math.max(0,parseInt(h.slice(5,7),16)-55)})`;
 
 function freqLabel(h){
@@ -828,17 +868,16 @@ function renderHabits(){
       }).join('');
 
       // Day count squares (if multiday)
-      let daySquares='';
-      if(h.multiday){
-        daySquares=Array.from({length:Math.max(dcount,1)},(_,i)=>{
-          const filled=i<dcount;
-          const isLast=i===dcount-1&&dcount>0;
-          return`<div style="width:28px;height:28px;border-radius:8px;border:2.5px solid ${col};background:${filled?col:'transparent'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;cursor:${!isFuture?'pointer':'default'};flex-shrink:0" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}',true)`:''}">${filled?'✓':''}</div>`;
-        }).join('');
-      } else {
-        const done=dcount>0;
-        daySquares=`<div style="width:32px;height:32px;border-radius:10px;border:2.5px solid ${col};background:${done?col:'transparent'};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;cursor:${!isFuture?'pointer':'default'}" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}')`:''}">${done?'✓':''}</div>`;
+      // Build day squares: filled (tap=undo) + 1 empty (tap=add), all in a row
+      const canAddMore = !isFuture && !weekDone;
+      let daySquares = `<div style="display:flex;gap:5px;align-items:center">`;
+      for(let i=0;i<dcount;i++){
+        daySquares += `<div class="hcard-check done" style="background:${col};border-color:${col};width:32px;height:32px;border-radius:10px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white" onclick="decrementLog('${h.id}','${S.hab.selDay}')">✓</div>`;
       }
+      if(canAddMore){
+        daySquares += `<div class="hcard-check todo" style="border-color:${col};width:32px;height:32px;border-radius:10px;flex-shrink:0;cursor:pointer" onclick="toggleLog('${h.id}','${S.hab.selDay}',true)"></div>`;
+      }
+      daySquares += `</div>`;
 
       return`<div class="hcard" data-habid="${h.id}" style="background:${col}15;border-color:${weekDone?col+'88':col+'2a'}">
         <div class="hcard-accent" style="background:${col}"></div>
@@ -847,10 +886,7 @@ function renderHabits(){
           <div class="hcard-freq">${freqLabel(h)} · ${wcount}/${target} esta semana</div>
           <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${squares}</div>
         </div>
-        <div style="display:flex;gap:5px;flex-direction:column;align-items:center">
-          ${daySquares}
-          ${h.multiday&&dcount>0&&!isFuture?`<div style="font-size:10px;color:${col};cursor:pointer;font-weight:700" onclick="decrementLog('${h.id}','${S.hab.selDay}')">− deshacer</div>`:''}
-        </div>
+        ${daySquares}
         <button class="hcard-edit" onclick="openEditHabit('${h.id}')">⋯</button>
         <div class="drag-handle" draggable="false">⠿</div>
       </div>`;
@@ -936,13 +972,18 @@ function openEvDetail(id){
   const d=pd(ev.date),dl=d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('dbar').style.background=`linear-gradient(90deg,${col},${col}66)`;
   document.getElementById('dtit').textContent=ev.title;
+  const isReadonly=ev.readonly||false;
   document.getElementById('dbody').innerHTML=`
+    ${isReadonly?`<div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#ff8a8022;color:#ff8a80;padding:3px 10px;border-radius:20px;font-weight:700;margin-bottom:12px">🗓 Festivo oficial</div>`:''}
     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📅 <span style="color:var(--text);font-weight:600">${dl}</span></div>
     ${ev.time?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🕐 <span style="color:var(--text);font-weight:600">${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}</span></div>`:''}
     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🏷️ <span style="color:var(--text);font-weight:600">${c?c.name:'Sin categoría'}</span></div>
     ${ev.notes?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📝 <span style="color:var(--text);font-weight:600">${ev.notes}</span></div>`:''}
     ${ev.reminder!==undefined&&ev.reminder!==''?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🔔 <span style="color:var(--text);font-weight:600">${reminderLabel(ev.reminder)}</span></div>`:''}
   `;
+  // Hide edit/delete for readonly events
+  document.querySelector('#detModal .bdel').style.display=isReadonly?'none':'';
+  document.querySelector('#detModal .bsav').style.display=isReadonly?'none':'';
   openM('detModal');
 }
 function delEvent(){ cancelNotification(S.cal.viewEvId); S.cal.evs=S.cal.evs.filter(e=>e.id!==S.cal.viewEvId); save(); closeM('detModal'); renderCalendar(); }
@@ -1061,6 +1102,119 @@ function openM(id){ document.getElementById(id).classList.add('open'); }
 function closeM(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
 
+
+
+// ─────────────────────────
+//  HOLIDAYS
+// ─────────────────────────
+const CCAA = {
+  'andalucia':      'Andalucía',
+  'aragon':         'Aragón',
+  'asturias':       'Asturias',
+  'baleares':       'Illes Balears',
+  'canarias':       'Canarias',
+  'cantabria':      'Cantabria',
+  'castilla_leon':  'Castilla y León',
+  'castilla_mancha':'Castilla-La Mancha',
+  'cataluna':       'Cataluña',
+  'extremadura':    'Extremadura',
+  'galicia':        'Galicia',
+  'madrid':         'Comunidad de Madrid',
+  'murcia':         'Región de Murcia',
+  'navarra':        'Navarra',
+  'pais_vasco':     'País Vasco',
+  'la_rioja':       'La Rioja',
+  'valencia':       'C. Valenciana',
+  'ceuta':          'Ceuta',
+  'melilla':        'Melilla',
+};
+
+const FESTIVOS_NAC = [
+  ['2025-01-01','Año Nuevo'],['2025-01-06','Reyes Magos'],
+  ['2025-04-18','Viernes Santo'],['2025-05-01','Día del Trabajador'],
+  ['2025-08-15','Asunción de la Virgen'],['2025-10-12','Fiesta Nacional de España'],
+  ['2025-11-01','Todos los Santos'],['2025-12-06','Día de la Constitución'],
+  ['2025-12-08','Inmaculada Concepción'],['2025-12-25','Navidad'],
+  ['2026-01-01','Año Nuevo'],['2026-01-06','Reyes Magos'],
+  ['2026-04-03','Viernes Santo'],['2026-05-01','Día del Trabajador'],
+  ['2026-08-15','Asunción de la Virgen'],['2026-10-12','Fiesta Nacional de España'],
+  ['2026-11-01','Todos los Santos'],['2026-12-06','Día de la Constitución'],
+  ['2026-12-08','Inmaculada Concepción'],['2026-12-25','Navidad'],
+];
+
+const FESTIVOS_CCAA = {
+  andalucia:[['2025-02-28','Día de Andalucía'],['2025-04-17','Jueves Santo'],['2026-02-28','Día de Andalucía'],['2026-04-02','Jueves Santo']],
+  aragon:[['2025-04-23','Día de Aragón'],['2025-04-17','Jueves Santo'],['2026-04-23','Día de Aragón'],['2026-04-02','Jueves Santo']],
+  asturias:[['2025-09-08','Día de Asturias'],['2025-04-17','Jueves Santo'],['2026-09-08','Día de Asturias'],['2026-04-02','Jueves Santo']],
+  baleares:[['2025-03-01','Día de les Illes Balears'],['2025-04-17','Jueves Santo'],['2026-03-01','Día de les Illes Balears'],['2026-04-02','Jueves Santo']],
+  canarias:[['2025-05-30','Día de Canarias'],['2025-04-17','Jueves Santo'],['2026-05-30','Día de Canarias'],['2026-04-02','Jueves Santo']],
+  cantabria:[['2025-07-28','Día de Cantabria'],['2025-09-15','La Bien Aparecida'],['2025-04-17','Jueves Santo'],['2026-07-28','Día de Cantabria'],['2026-09-15','La Bien Aparecida'],['2026-04-02','Jueves Santo']],
+  castilla_leon:[['2025-04-23','Día de Castilla y León'],['2025-04-17','Jueves Santo'],['2026-04-23','Día de Castilla y León'],['2026-04-02','Jueves Santo']],
+  castilla_mancha:[['2025-05-31','Corpus Christi'],['2025-04-17','Jueves Santo'],['2026-04-02','Jueves Santo']],
+  cataluna:[['2025-04-21','Lunes de Pascua'],['2025-06-24','San Juan'],['2025-09-11','Diada de Catalunya'],['2026-04-06','Lunes de Pascua'],['2026-06-24','San Juan'],['2026-09-11','Diada de Catalunya']],
+  extremadura:[['2025-09-08','Día de Extremadura'],['2025-04-17','Jueves Santo'],['2026-09-08','Día de Extremadura'],['2026-04-02','Jueves Santo']],
+  galicia:[['2025-05-17','Día de las Letras Gallegas'],['2025-07-25','Día de Galicia'],['2026-05-17','Día de las Letras Gallegas'],['2026-07-25','Día de Galicia']],
+  madrid:[['2025-05-02','Día de la Comunidad de Madrid'],['2025-05-15','San Isidro'],['2025-07-25','Santiago Apóstol'],['2025-11-10','Almudena'],['2026-05-02','Día de la Comunidad de Madrid'],['2026-05-15','San Isidro'],['2026-07-25','Santiago Apóstol'],['2026-11-10','Almudena']],
+  murcia:[['2025-06-09','Día de la Región de Murcia'],['2025-04-17','Jueves Santo'],['2026-06-09','Día de la Región de Murcia'],['2026-04-02','Jueves Santo']],
+  navarra:[['2025-07-07','San Fermín'],['2025-09-27','Día de Navarra'],['2025-04-17','Jueves Santo'],['2026-07-07','San Fermín'],['2026-09-27','Día de Navarra'],['2026-04-02','Jueves Santo']],
+  pais_vasco:[['2025-04-17','Jueves Santo'],['2025-07-25','Santiago Apóstol'],['2025-10-25','Día del País Vasco'],['2026-04-02','Jueves Santo'],['2026-07-25','Santiago Apóstol'],['2026-10-25','Día del País Vasco']],
+  la_rioja:[['2025-06-09','Día de La Rioja'],['2025-12-26','San Esteban'],['2025-04-17','Jueves Santo'],['2026-06-09','Día de La Rioja'],['2026-12-26','San Esteban'],['2026-04-02','Jueves Santo']],
+  valencia:[['2025-03-19','San José · Fallas'],['2025-04-21','Lunes de Pascua'],['2025-10-09','Día de la Comunitat Valenciana'],['2026-03-19','San José · Fallas'],['2026-04-06','Lunes de Pascua'],['2026-10-09','Día de la Comunitat Valenciana']],
+  ceuta:[['2025-09-02','Día de Ceuta'],['2025-04-17','Jueves Santo'],['2026-09-02','Día de Ceuta'],['2026-04-02','Jueves Santo']],
+  melilla:[['2025-09-17','Día de Melilla'],['2025-04-17','Jueves Santo'],['2026-09-17','Día de Melilla'],['2026-04-02','Jueves Santo']],
+};
+
+const FESTIVOS_CAT_ID = 'cat_festivos';
+const FESTIVOS_COLOR = '#ff8a80';
+
+function getFestivosCategory(){
+  return S.cal.cats.find(c=>c.id===FESTIVOS_CAT_ID);
+}
+
+function loadHolidays(ccaaKey){
+  // Remove existing holiday events
+  S.cal.evs = S.cal.evs.filter(e=>e.cat!==FESTIVOS_CAT_ID);
+
+  // Add or update category
+  if(!getFestivosCategory()){
+    S.cal.cats.push({id:FESTIVOS_CAT_ID, name:'Festivos', color:FESTIVOS_COLOR, visible:true, readonly:true, ccaa:ccaaKey});
+  } else {
+    const cat=getFestivosCategory();
+    cat.ccaa=ccaaKey;
+    cat.color=FESTIVOS_COLOR;
+  }
+
+  // Build events: national + ccaa
+  const all=[...FESTIVOS_NAC, ...(FESTIVOS_CCAA[ccaaKey]||[])];
+  all.forEach(([date,title])=>{
+    S.cal.evs.push({
+      id:'fest_'+date+'_'+ccaaKey,
+      title,date,time:'',timeEnd:'',cat:FESTIVOS_CAT_ID,
+      notes: ccaaKey==='nacional'?'Festivo nacional':'Festivo · '+(CCAA[ccaaKey]||ccaaKey),
+      readonly:true,
+    });
+  });
+
+  save(); renderCalendar();
+}
+
+function removeHolidays(){
+  S.cal.evs=S.cal.evs.filter(e=>e.cat!==FESTIVOS_CAT_ID);
+  S.cal.cats=S.cal.cats.filter(c=>c.id!==FESTIVOS_CAT_ID);
+  save(); renderCalendar();
+}
+
+function openHolidayModal(){
+  document.getElementById('ccaaSelect').value = getFestivosCategory()?.ccaa || '';
+  openM('holidayModal');
+}
+
+function saveHolidays(){
+  const key=document.getElementById('ccaaSelect').value;
+  if(!key){ removeHolidays(); closeM('holidayModal'); return; }
+  loadHolidays(key);
+  closeM('holidayModal');
+}
 
 // ─────────────────────────
 //  NOTIFICATIONS
