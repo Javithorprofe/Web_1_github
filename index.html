@@ -506,10 +506,24 @@ body.dark {
         <button class="fopt" data-freq="weekly" onclick="setFreq(this)">Cada semana</button>
         <button class="fopt" data-freq="xdays" onclick="setFreq(this)">Cada X días</button>
         <button class="fopt" data-freq="monthly" onclick="setFreq(this)">Cada mes</button>
+        <button class="fopt" data-freq="nweek" onclick="setFreq(this)" style="grid-column:span 2">X veces por semana</button>
       </div>
       <div class="xrow" id="xrow" style="display:none">
         <input type="number" class="fi" id="hX" placeholder="3" min="2" max="30" style="max-width:80px">
         <div class="xlabel">días entre cada vez</div>
+      </div>
+      <div class="xrow" id="nweekrow" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="number" class="fi" id="hNweek" placeholder="3" min="1" max="7" style="max-width:80px">
+          <div class="xlabel">veces por semana</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;transition:border-color .15s" id="multidayLabel">
+          <span style="position:relative;width:22px;height:22px;flex-shrink:0">
+            <input type="checkbox" id="hMultiday" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer;margin:0" onchange="updateMultidayStyle()">
+            <span id="multidayBox" style="position:absolute;inset:0;border-radius:6px;border:2px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;transition:background .15s,border-color .15s"></span>
+          </span>
+          <span style="font-size:13px;color:var(--text);font-weight:500;line-height:1.3">Puede marcarse varias veces el mismo día</span>
+        </label>
       </div>
     </div>
     <div class="fg"><label class="fl">Color</label><div class="cgrid" id="hColors"></div></div>
@@ -536,18 +550,53 @@ const ds=(d)=>d.toISOString().split('T')[0];
 const darken=(h)=>`rgb(${Math.max(0,parseInt(h.slice(1,3),16)-55)},${Math.max(0,parseInt(h.slice(3,5),16)-55)},${Math.max(0,parseInt(h.slice(5,7),16)-55)})`;
 
 function freqLabel(h){
-  return h.freq==='daily'?'Cada día':h.freq==='weekly'?'Cada semana':h.freq==='monthly'?'Cada mes':`Cada ${h.xdays} días`;
+  if(h.freq==='daily') return 'Cada día';
+  if(h.freq==='weekly') return 'Cada semana';
+  if(h.freq==='monthly') return 'Cada mes';
+  if(h.freq==='xdays') return `Cada ${h.xdays} días`;
+  if(h.freq==='nweek') return `${h.nweek}x por semana`;
+  return '';
 }
 
 function isActive(h,dateStr){
   if(!h.createdAt||dateStr<h.createdAt) return false;
   if(h.freq==='daily') return true;
+  if(h.freq==='nweek') return true; // shows every day
   const sd=pd(h.createdAt), cd=pd(dateStr);
   const diff=Math.round((cd-sd)/86400000);
   if(h.freq==='weekly') return diff>=0&&diff%7===0;
   if(h.freq==='monthly') return cd.getDate()===sd.getDate();
   if(h.freq==='xdays') return diff>=0&&diff%h.xdays===0;
   return false;
+}
+
+// Get week start (Monday) for a dateStr
+function weekStart(dateStr){
+  const d=pd(dateStr);
+  const dow=d.getDay()===0?6:d.getDay()-1;
+  const mon=new Date(d); mon.setDate(d.getDate()-dow);
+  return mon.toISOString().split('T')[0];
+}
+
+// Count how many times habit logged this week
+function weekCount(h,dateStr){
+  const monStr=weekStart(dateStr);
+  const mon=pd(monStr);
+  let count=0;
+  for(let i=0;i<7;i++){
+    const d=new Date(mon); d.setDate(mon.getDate()+i);
+    const ds2=d.toISOString().split('T')[0];
+    const val=S.hab.logs[h.id+'_'+ds2];
+    if(val) count+=typeof val==='number'?val:1;
+  }
+  return count;
+}
+
+// Count logs for a specific day (supports multi)
+function dayCount(h,dateStr){
+  const val=S.hab.logs[h.id+'_'+dateStr];
+  if(!val) return 0;
+  return typeof val==='number'?val:1;
 }
 
 // ─────────────────────────
@@ -710,6 +759,17 @@ function renderHabits(){
     const dots=S.hab.habits.map(h=>{
       const active=isActive(h,dstr);
       if(!active) return '';
+      if(h.freq==='nweek'){
+        const target=h.nweek||3;
+        const wc=weekCount(h,dstr);
+        const dc=dayCount(h,dstr);
+        // Show squares: filled = done today, semi = done this week, empty = pending
+        return Array.from({length:Math.min(target,3)},(_,i)=>{
+          const weekFilled=i<wc;
+          const dayFilled=i<dc;
+          return`<div class="wday-hab-dot ${dayFilled?'done':weekFilled?'done':'todo'}" style="background:${h.color};opacity:${dayFilled?1:weekFilled?0.5:0.2}"></div>`;
+        }).join('');
+      }
       const done=S.hab.logs[h.id+'_'+dstr]||false;
       return`<div class="wday-hab-dot ${done?'done':'todo'}" style="background:${h.color}"></div>`;
     }).join('');
@@ -752,9 +812,52 @@ function renderHabits(){
 
   // rendered below, initDrag called after
   el.innerHTML=activeHabits.map(h=>{
+    const col=h.color;
+
+    if(h.freq==='nweek'){
+      const wcount=weekCount(h,S.hab.selDay);
+      const dcount=dayCount(h,S.hab.selDay);
+      const target=h.nweek||3;
+      const weekDone=wcount>=target;
+      const canAdd=!isFuture&&(!weekDone||(h.multiday&&dcount>0));
+
+      // Week progress squares
+      const squares=Array.from({length:target},(_,i)=>{
+        const filled=i<wcount;
+        return`<div style="width:18px;height:18px;border-radius:5px;border:2px solid ${col};background:${filled?col:'transparent'};transition:background .15s;flex-shrink:0"></div>`;
+      }).join('');
+
+      // Day count squares (if multiday)
+      let daySquares='';
+      if(h.multiday){
+        daySquares=Array.from({length:Math.max(dcount,1)},(_,i)=>{
+          const filled=i<dcount;
+          const isLast=i===dcount-1&&dcount>0;
+          return`<div style="width:28px;height:28px;border-radius:8px;border:2.5px solid ${col};background:${filled?col:'transparent'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;cursor:${!isFuture?'pointer':'default'};flex-shrink:0" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}',true)`:''}">${filled?'✓':''}</div>`;
+        }).join('');
+      } else {
+        const done=dcount>0;
+        daySquares=`<div style="width:32px;height:32px;border-radius:10px;border:2.5px solid ${col};background:${done?col:'transparent'};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;cursor:${!isFuture?'pointer':'default'}" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}')`:''}">${done?'✓':''}</div>`;
+      }
+
+      return`<div class="hcard" data-habid="${h.id}" style="background:${col}15;border-color:${weekDone?col+'88':col+'2a'}">
+        <div class="hcard-accent" style="background:${col}"></div>
+        <div class="hcard-info">
+          <div class="hcard-name">${h.name}${weekDone?` <span style="font-size:10px;background:${col};color:white;padding:2px 7px;border-radius:20px;font-weight:700;vertical-align:middle">✓ semana</span>`:''}</div>
+          <div class="hcard-freq">${freqLabel(h)} · ${wcount}/${target} esta semana</div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${squares}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-direction:column;align-items:center">
+          ${daySquares}
+          ${h.multiday&&dcount>0&&!isFuture?`<div style="font-size:10px;color:${col};cursor:pointer;font-weight:700" onclick="decrementLog('${h.id}','${S.hab.selDay}')">− deshacer</div>`:''}
+        </div>
+        <button class="hcard-edit" onclick="openEditHabit('${h.id}')">⋯</button>
+        <div class="drag-handle" draggable="false">⠿</div>
+      </div>`;
+    }
+
     const key=h.id+'_'+S.hab.selDay;
     const done=S.hab.logs[key]||false;
-    const col=h.color;
     const checkStyle=done?`background:${col};border-color:${col}`:`border-color:${col}`;
 
     return`<div class="hcard" data-habid="${h.id}" style="background:${col}15;border-color:${col}2a">
@@ -776,10 +879,26 @@ function selectDay(dstr){
   renderHabits();
 }
 
-function toggleLog(habId,dstr){
+function toggleLog(habId,dstr,increment=false){
+  const h=S.hab.habits.find(h=>h.id===habId);
   const key=habId+'_'+dstr;
-  S.hab.logs[key]=!S.hab.logs[key];
-  if(!S.hab.logs[key]) delete S.hab.logs[key];
+  if(increment){
+    // multiday: increment count
+    const cur=S.hab.logs[key]||0;
+    S.hab.logs[key]=cur+1;
+  } else {
+    // standard toggle
+    S.hab.logs[key]=!S.hab.logs[key];
+    if(!S.hab.logs[key]) delete S.hab.logs[key];
+  }
+  save(); renderHabits();
+}
+
+function decrementLog(habId,dstr){
+  const key=habId+'_'+dstr;
+  const cur=S.hab.logs[key]||0;
+  if(cur<=1) delete S.hab.logs[key];
+  else S.hab.logs[key]=cur-1;
   save(); renderHabits();
 }
 
@@ -867,7 +986,9 @@ function openHabModal(){
   S.hab.editId=null; S.hab.selFreq='daily'; S.hab.selColor=CD[0];
   document.getElementById('habTitle').innerHTML='Nuevo <em>hábito</em>';
   document.getElementById('hName').value=''; document.getElementById('hX').value='';
+  document.getElementById('hNweek').value=''; document.getElementById('hMultiday').checked=false; updateMultidayStyle();
   document.getElementById('xrow').style.display='none';
+  document.getElementById('nweekrow').style.display='none';
   document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b.dataset.freq==='daily'));
   document.getElementById('habBtns').innerHTML=`<button class="bcnc" onclick="closeM('habModal')">Cancelar</button><button class="bsav" onclick="saveHabit()">Guardar ✓</button>`;
   renderHabColors(); openM('habModal');
@@ -878,22 +999,52 @@ function openEditHabit(id){
   document.getElementById('habTitle').innerHTML='Editar <em>hábito</em>'; document.getElementById('hName').value=h.name;
   document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b.dataset.freq===h.freq));
   document.getElementById('xrow').style.display=h.freq==='xdays'?'flex':'none';
+  document.getElementById('nweekrow').style.display=h.freq==='nweek'?'flex':'none';
   if(h.freq==='xdays') document.getElementById('hX').value=h.xdays||2;
+  if(h.freq==='nweek'){ document.getElementById('hNweek').value=h.nweek||3; document.getElementById('hMultiday').checked=h.multiday||false; updateMultidayStyle(); }
   document.getElementById('habBtns').innerHTML=`<button class="bdel" onclick="delHabit('${id}')">Borrar</button><button class="bcnc" onclick="closeM('habModal')">Cancelar</button><button class="bsav" onclick="saveHabit()">Guardar ✓</button>`;
   renderHabColors(); openM('habModal');
 }
+function updateMultidayStyle(){
+  const cb=document.getElementById('hMultiday');
+  const box=document.getElementById('multidayBox');
+  const label=document.getElementById('multidayLabel');
+  if(!box||!label) return;
+  if(cb.checked){
+    box.style.background='var(--accent)';
+    box.style.borderColor='var(--accent)';
+    box.textContent='✓';
+    label.style.borderColor='var(--accent)';
+  } else {
+    box.style.background='var(--surface)';
+    box.style.borderColor='var(--border)';
+    box.textContent='';
+    label.style.borderColor='var(--border)';
+  }
+}
+
 function setFreq(btn){
   S.hab.selFreq=btn.dataset.freq;
   document.querySelectorAll('.fopt').forEach(b=>b.classList.toggle('sel',b===btn));
   document.getElementById('xrow').style.display=S.hab.selFreq==='xdays'?'flex':'none';
+  document.getElementById('nweekrow').style.display=S.hab.selFreq==='nweek'?'flex':'none';
 }
 function renderHabColors(){ document.getElementById('hColors').innerHTML=CD.map(c=>`<div class="csw${c===S.hab.selColor?' sel':''}" style="background:${c}" onclick="selHC('${c}')"></div>`).join(''); }
 function selHC(c){ S.hab.selColor=c; renderHabColors(); }
 function saveHabit(){
   const name=document.getElementById('hName').value.trim(); if(!name) return;
   const xd=parseInt(document.getElementById('hX').value)||2;
+  const nw=parseInt(document.getElementById('hNweek').value)||3;
+  const multiday=document.getElementById('hMultiday').checked;
   const existing=S.hab.editId?S.hab.habits.find(h=>h.id===S.hab.editId):null;
-  const h={id:S.hab.editId||'h'+Date.now(),name,freq:S.hab.selFreq,color:S.hab.selColor,xdays:S.hab.selFreq==='xdays'?xd:1,createdAt:existing?existing.createdAt:tds()};
+  const h={
+    id:S.hab.editId||'h'+Date.now(),
+    name,freq:S.hab.selFreq,color:S.hab.selColor,
+    xdays:S.hab.selFreq==='xdays'?xd:1,
+    nweek:S.hab.selFreq==='nweek'?nw:1,
+    multiday:S.hab.selFreq==='nweek'?multiday:false,
+    createdAt:existing?existing.createdAt:tds()
+  };
   if(S.hab.editId){ const i=S.hab.habits.findIndex(h=>h.id===S.hab.editId); if(i>-1) S.hab.habits[i]=h; } else S.hab.habits.push(h);
   save(); closeM('habModal'); renderHabits();
 }
