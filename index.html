@@ -251,6 +251,13 @@ body.dark {
 /* Habit list */
 .hlist { padding:14px 16px 0; display:flex; flex-direction:column; gap:10px; }
 
+
+/* ── DRAG TO REORDER ── */
+.hcard { cursor:grab; user-select:none; }
+.hcard.dragging { opacity:0.4; cursor:grabbing; }
+.hcard.drag-over { border-color:var(--accent) !important; background:var(--surface2) !important; }
+.hcard-drag-handle { color:var(--muted); font-size:18px; cursor:grab; padding:0 4px; flex-shrink:0; touch-action:none; }
+
 .hcard {
   border-radius:16px; padding:13px 14px;
   display:flex; align-items:center; gap:10px;
@@ -281,6 +288,13 @@ body.dark {
 
 
 /* FAB */
+
+/* ── DRAG REORDER ── */
+.hcard { touch-action:pan-y; }
+.hcard.dragging { opacity:0.35; transform:scale(0.98); }
+.hcard.drag-over { border-color:var(--accent) !important; }
+.drag-handle { color:var(--muted); font-size:16px; padding:0 2px; flex-shrink:0; cursor:grab; display:flex; align-items:center; }
+
 .fab {
   position:fixed; bottom:28px; right:50%; transform:translateX(195px);
   width:56px; height:56px;
@@ -432,8 +446,26 @@ body.dark {
     <div class="mtit2" id="evTitle">Nuevo <em>evento</em></div>
     <div class="fg"><label class="fl">Título</label><input class="fi" id="evT" placeholder="¿Qué tienes planeado?"></div>
     <div class="fg"><label class="fl">Fecha</label><input type="date" class="fi" id="evD"></div>
-    <div class="fg"><label class="fl">Hora (opcional)</label><input type="time" class="fi" id="evH"></div>
-    <div class="fg"><label class="fl">Categoría</label><select class="fi" id="evC"></select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg" style="margin-bottom:0"><label class="fl">Hora inicio</label><input type="time" class="fi" id="evH"></div>
+      <div class="fg" style="margin-bottom:0"><label class="fl">Hora fin</label><input type="time" class="fi" id="evH2"></div>
+    </div>
+    <div class="fg" style="margin-top:14px"><label class="fl">Categoría</label><select class="fi" id="evC"></select></div>
+    <div class="fg"><label class="fl">Recordatorio</label>
+      <select class="fi" id="evR">
+        <option value="">Sin recordatorio</option>
+        <option value="0">En el momento</option>
+        <option value="5">5 minutos antes</option>
+        <option value="10">10 minutos antes</option>
+        <option value="15">15 minutos antes</option>
+        <option value="30">30 minutos antes</option>
+        <option value="60">1 hora antes</option>
+        <option value="120">2 horas antes</option>
+        <option value="360">6 horas antes</option>
+        <option value="720">12 horas antes</option>
+        <option value="1440">1 día antes</option>
+      </select>
+    </div>
     <div class="fg"><label class="fl">Notas (opcional)</label><input class="fi" id="evN" placeholder="Añade una nota..."></div>
     <div class="mbtns"><button class="bcnc" onclick="closeM('evModal')">Cancelar</button><button class="bsav" onclick="saveEvent()">Guardar ✓</button></div>
   </div>
@@ -621,7 +653,8 @@ function renderUpcoming(){
   el.innerHTML=up.map(ev=>{
     const c=S.cal.cats.find(c=>c.id===ev.cat),col=c?c.color:'#aaa';
     const d=pd(ev.date),dl=d.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'});
-    return`<div class="ucard" onclick="openEvDetail('${ev.id}')"><div class="uline" style="background:${col}"></div><div class="uinfo"><div class="un">${ev.title}</div><div class="um">${dl}${ev.time?' · '+ev.time:''}</div></div><div class="ubadge" style="background:${col}33;color:${darken(col)}">${c?c.name:''}</div></div>`;
+    const timeStr=ev.time?(ev.timeEnd?' · '+ev.time+' – '+ev.timeEnd:' · '+ev.time):'';
+    return`<div class="ucard" onclick="openEvDetail('${ev.id}')"><div class="uline" style="background:${col}"></div><div class="uinfo"><div class="un">${ev.title}</div><div class="um">${dl}${timeStr}</div></div><div class="ubadge" style="background:${col}33;color:${darken(col)}">${c?c.name:''}</div></div>`;
   }).join('');
 }
 
@@ -717,13 +750,14 @@ function renderHabits(){
     return;
   }
 
+  // rendered below, initDrag called after
   el.innerHTML=activeHabits.map(h=>{
     const key=h.id+'_'+S.hab.selDay;
     const done=S.hab.logs[key]||false;
     const col=h.color;
     const checkStyle=done?`background:${col};border-color:${col}`:`border-color:${col}`;
 
-    return`<div class="hcard" style="background:${col}15;border-color:${col}2a">
+    return`<div class="hcard" data-habid="${h.id}" style="background:${col}15;border-color:${col}2a">
       <div class="hcard-accent" style="background:${col}"></div>
       <div class="hcard-info">
         <div class="hcard-name">${h.name}</div>
@@ -731,8 +765,10 @@ function renderHabits(){
       </div>
       <div class="hcard-check ${done?'done':'todo'}" style="${checkStyle}" onclick="${!isFuture?`toggleLog('${h.id}','${S.hab.selDay}')`:''}">${done?'✓':''}</div>
       <button class="hcard-edit" onclick="openEditHabit('${h.id}')">⋯</button>
+      <div class="drag-handle" draggable="false">⠿</div>
     </div>`;
   }).join('');
+  initDrag();
 }
 
 function selectDay(dstr){
@@ -760,14 +796,17 @@ function openEventModal(dstr){
   document.getElementById('evT').value='';
   document.getElementById('evD').value=dstr||tds();
   document.getElementById('evH').value='';
+  document.getElementById('evH2').value='';
   document.getElementById('evN').value='';
+  document.getElementById('evR').value='';
   document.getElementById('evC').innerHTML=S.cal.cats.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   openM('evModal');
 }
 function saveEvent(){
   const title=document.getElementById('evT').value.trim(),date=document.getElementById('evD').value;
   if(!title||!date) return;
-  const ev={id:S.cal.editEvId||'e'+Date.now(),title,date,time:document.getElementById('evH').value,cat:document.getElementById('evC').value,notes:document.getElementById('evN').value.trim()};
+  const ev={id:S.cal.editEvId||'e'+Date.now(),title,date,time:document.getElementById('evH').value,timeEnd:document.getElementById('evH2').value,cat:document.getElementById('evC').value,notes:document.getElementById('evN').value.trim(),reminder:document.getElementById('evR').value};
+  scheduleNotification(ev);
   if(S.cal.editEvId){ const i=S.cal.evs.findIndex(e=>e.id===S.cal.editEvId); if(i>-1) S.cal.evs[i]=ev; } else S.cal.evs.push(ev);
   save(); closeM('evModal'); renderCalendar();
 }
@@ -780,19 +819,20 @@ function openEvDetail(id){
   document.getElementById('dtit').textContent=ev.title;
   document.getElementById('dbody').innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📅 <span style="color:var(--text);font-weight:600">${dl}</span></div>
-    ${ev.time?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🕐 <span style="color:var(--text);font-weight:600">${ev.time}</span></div>`:''}
+    ${ev.time?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🕐 <span style="color:var(--text);font-weight:600">${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}</span></div>`:''}
     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🏷️ <span style="color:var(--text);font-weight:600">${c?c.name:'Sin categoría'}</span></div>
     ${ev.notes?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">📝 <span style="color:var(--text);font-weight:600">${ev.notes}</span></div>`:''}
+    ${ev.reminder!==undefined&&ev.reminder!==''?`<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-bottom:8px">🔔 <span style="color:var(--text);font-weight:600">${reminderLabel(ev.reminder)}</span></div>`:''}
   `;
   openM('detModal');
 }
-function delEvent(){ S.cal.evs=S.cal.evs.filter(e=>e.id!==S.cal.viewEvId); save(); closeM('detModal'); renderCalendar(); }
+function delEvent(){ cancelNotification(S.cal.viewEvId); S.cal.evs=S.cal.evs.filter(e=>e.id!==S.cal.viewEvId); save(); closeM('detModal'); renderCalendar(); }
 function editEv(){
   const ev=S.cal.evs.find(e=>e.id===S.cal.viewEvId); if(!ev) return;
   closeM('detModal'); S.cal.editEvId=ev.id;
   document.getElementById('evTitle').innerHTML='Editar <em>evento</em>';
   document.getElementById('evT').value=ev.title; document.getElementById('evD').value=ev.date;
-  document.getElementById('evH').value=ev.time||''; document.getElementById('evN').value=ev.notes||'';
+  document.getElementById('evH').value=ev.time||''; document.getElementById('evH2').value=ev.timeEnd||''; document.getElementById('evN').value=ev.notes||''; document.getElementById('evR').value=ev.reminder||'';
   document.getElementById('evC').innerHTML=S.cal.cats.map(c=>`<option value="${c.id}"${c.id===ev.cat?' selected':''}>${c.name}</option>`).join('');
   openM('evModal');
 }
@@ -870,12 +910,156 @@ function openM(id){ document.getElementById(id).classList.add('open'); }
 function closeM(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
 
+
+// ─────────────────────────
+//  NOTIFICATIONS
+// ─────────────────────────
+function reminderLabel(val){
+  const v=parseInt(val);
+  if(v===0) return 'En el momento';
+  if(v<60) return `${v} minutos antes`;
+  if(v===60) return '1 hora antes';
+  if(v<1440) return `${v/60} horas antes`;
+  return '1 día antes';
+}
+
+async function requestNotifPermission(){
+  if(!('Notification' in window)) return false;
+  if(Notification.permission==='granted') return true;
+  if(Notification.permission==='denied') return false;
+  const perm=await Notification.requestPermission();
+  return perm==='granted';
+}
+
+function scheduleNotification(ev){
+  if(ev.reminder===''||ev.reminder===undefined||ev.reminder===null) return;
+  if(!ev.time) return; // needs a time to schedule
+  if(!('Notification' in window)) return;
+
+  // Cancel previous notification for this event if any
+  cancelNotification(ev.id);
+
+  const [h,m]=ev.time.split(':').map(Number);
+  const evDate=pd(ev.date);
+  evDate.setHours(h,m,0,0);
+  const notifTime=new Date(evDate.getTime()-parseInt(ev.reminder)*60000);
+  const now=new Date();
+  const delay=notifTime.getTime()-now.getTime();
+
+  if(delay<=0) return; // already past
+
+  const timerId=setTimeout(async()=>{
+    const granted=await requestNotifPermission();
+    if(!granted) return;
+    const cat=S.cal.cats.find(c=>c.id===ev.cat);
+    new Notification(ev.title,{
+      body: ev.reminder==='0'
+        ? `Ahora · ${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`
+        : `${reminderLabel(ev.reminder)} · ${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: ev.id,
+    });
+  }, delay);
+
+  // Store timer id so we can cancel it
+  S.cal.notifTimers=S.cal.notifTimers||{};
+  S.cal.notifTimers[ev.id]=timerId;
+}
+
+function cancelNotification(evId){
+  if(S.cal.notifTimers&&S.cal.notifTimers[evId]){
+    clearTimeout(S.cal.notifTimers[evId]);
+    delete S.cal.notifTimers[evId];
+  }
+}
+
+function scheduleAllNotifications(){
+  if(!('Notification' in window)) return;
+  S.cal.evs.forEach(ev=>scheduleNotification(ev));
+}
+
 // ─────────────────────────
 //  INIT
 // ─────────────────────────
 load();
 renderCalendar();
 renderHabits();
+// Request notification permission and schedule all existing reminders
+requestNotifPermission().then(granted=>{
+  if(granted) scheduleAllNotifications();
+});
+
+
+// ─────────────────────────
+//  DRAG TO REORDER HABITS
+// ─────────────────────────
+let dragSrc=null;
+
+function initDrag(){
+  const cards=document.querySelectorAll('#hList .hcard');
+  cards.forEach((card,i)=>{
+    const handle=card.querySelector('.drag-handle');
+    if(!handle) return;
+
+    // Touch events
+    handle.addEventListener('touchstart',e=>{
+      dragSrc=card;
+      card.classList.add('dragging');
+      e.preventDefault();
+    },{passive:false});
+
+    handle.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      const touch=e.touches[0];
+      const el=document.elementFromPoint(touch.clientX,touch.clientY);
+      const target=el?.closest('.hcard');
+      if(target&&target!==dragSrc){
+        document.querySelectorAll('.hcard').forEach(c=>c.classList.remove('drag-over'));
+        target.classList.add('drag-over');
+      }
+    },{passive:false});
+
+    handle.addEventListener('touchend',e=>{
+      const touch=e.changedTouches[0];
+      const el=document.elementFromPoint(touch.clientX,touch.clientY);
+      const target=el?.closest('.hcard');
+      document.querySelectorAll('.hcard').forEach(c=>c.classList.remove('drag-over','dragging'));
+      if(target&&target!==dragSrc){
+        const habIds=Array.from(document.querySelectorAll('#hList .hcard')).map(c=>c.dataset.habid);
+        const srcIdx=habIds.indexOf(dragSrc.dataset.habid);
+        const tgtIdx=habIds.indexOf(target.dataset.habid);
+        if(srcIdx>-1&&tgtIdx>-1){
+          const moved=S.hab.habits.splice(srcIdx,1)[0];
+          S.hab.habits.splice(tgtIdx,0,moved);
+          save(); renderHabits();
+        }
+      }
+      dragSrc=null;
+    });
+
+    // Mouse events (desktop)
+    card.setAttribute('draggable','true');
+    card.addEventListener('dragstart',e=>{ dragSrc=card; setTimeout(()=>card.classList.add('dragging'),0); });
+    card.addEventListener('dragover',e=>{ e.preventDefault(); if(card!==dragSrc){ document.querySelectorAll('.hcard').forEach(c=>c.classList.remove('drag-over')); card.classList.add('drag-over'); } });
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      document.querySelectorAll('.hcard').forEach(c=>c.classList.remove('drag-over','dragging'));
+      if(dragSrc&&dragSrc!==card){
+        const habIds=Array.from(document.querySelectorAll('#hList .hcard')).map(c=>c.dataset.habid);
+        const srcIdx=habIds.indexOf(dragSrc.dataset.habid);
+        const tgtIdx=habIds.indexOf(card.dataset.habid);
+        if(srcIdx>-1&&tgtIdx>-1){
+          const moved=S.hab.habits.splice(srcIdx,1)[0];
+          S.hab.habits.splice(tgtIdx,0,moved);
+          save(); renderHabits();
+        }
+      }
+      dragSrc=null;
+    });
+    card.addEventListener('dragend',()=>{ document.querySelectorAll('.hcard').forEach(c=>c.classList.remove('dragging','drag-over')); dragSrc=null; });
+  });
+}
 
 // ── PWA: register service worker ──
 if('serviceWorker' in navigator){
