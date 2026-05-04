@@ -1544,7 +1544,25 @@ function reminderLabel(val){
   return '1 día antes';
 }
 
+// Detect if running inside Capacitor (native app) or browser (PWA)
+const isNative = () => !!(window.Capacitor?.isNativePlatform?.());
+
+// Unique numeric id from string (for Capacitor which needs integer ids)
+function notifNumId(evId){
+  let hash=0;
+  for(let i=0;i<evId.length;i++) hash=(hash*31+evId.charCodeAt(i))&0x7fffffff;
+  return hash||1;
+}
+
 async function requestNotifPermission(){
+  if(isNative()){
+    try{
+      const { LocalNotifications } = window.Capacitor.Plugins;
+      const perm = await LocalNotifications.requestPermissions();
+      return perm.display==='granted';
+    }catch(e){ return false; }
+  }
+  // Web fallback
   if(!('Notification' in window)) return false;
   if(Notification.permission==='granted') return true;
   if(Notification.permission==='denied') return false;
@@ -1552,55 +1570,71 @@ async function requestNotifPermission(){
   return perm==='granted';
 }
 
-function scheduleNotification(ev){
+async function scheduleNotification(ev){
   if(ev.reminder===''||ev.reminder===undefined||ev.reminder===null) return;
-  if(!ev.time) return; // needs a time to schedule
-  if(!('Notification' in window)) return;
-
-  // Cancel previous notification for this event if any
-  cancelNotification(ev.id);
+  if(!ev.time) return;
 
   const [h,m]=ev.time.split(':').map(Number);
   const evDate=pd(ev.date);
   evDate.setHours(h,m,0,0);
   const notifTime=new Date(evDate.getTime()-parseInt(ev.reminder)*60000);
-  const now=new Date();
-  const delay=notifTime.getTime()-now.getTime();
+  if(notifTime<=new Date()) return; // already past
 
-  if(delay<=0) return; // already past
+  const cat=S.cal.cats.find(c=>c.id===ev.cat);
+  const body=ev.reminder==='0'
+    ? `${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`
+    : `${reminderLabel(ev.reminder)} · ${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`;
 
-  const timerId=setTimeout(async()=>{
-    const granted=await requestNotifPermission();
-    if(!granted) return;
-    const cat=S.cal.cats.find(c=>c.id===ev.cat);
-    new Notification(ev.title,{
-      body: ev.reminder==='0'
-        ? `Ahora · ${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`
-        : `${reminderLabel(ev.reminder)} · ${ev.time}${ev.timeEnd?' – '+ev.timeEnd:''}${cat?' · '+cat.name:''}`,
-      icon: 'icon-192.png',
-      badge: 'icon-192.png',
-      tag: ev.id,
-    });
-  }, delay);
+  await cancelNotification(ev.id);
 
-  // Store timer id so we can cancel it
-  S.cal.notifTimers=S.cal.notifTimers||{};
-  S.cal.notifTimers[ev.id]=timerId;
-}
-
-function cancelNotification(evId){
-  if(S.cal.notifTimers&&S.cal.notifTimers[evId]){
-    clearTimeout(S.cal.notifTimers[evId]);
-    delete S.cal.notifTimers[evId];
+  if(isNative()){
+    try{
+      const { LocalNotifications } = window.Capacitor.Plugins;
+      await LocalNotifications.schedule({
+        notifications:[{
+          id: notifNumId(ev.id),
+          title: ev.title,
+          body,
+          schedule:{ at: notifTime, allowWhileIdle: true },
+          smallIcon: 'ic_launcher_foreground',
+          iconColor: '#e8a4b8',
+        }]
+      });
+    }catch(e){ console.warn('LocalNotifications error:',e); }
+  } else {
+    // Web fallback: setTimeout (only works while app is open)
+    const delay=notifTime.getTime()-Date.now();
+    if(delay<=0) return;
+    S.cal.notifTimers=S.cal.notifTimers||{};
+    S.cal.notifTimers[ev.id]=setTimeout(async()=>{
+      const granted=await requestNotifPermission();
+      if(!granted) return;
+      new Notification(ev.title,{ body, icon:'icon-192.png', tag:ev.id });
+    }, delay);
   }
 }
 
-function scheduleAllNotifications(){
-  if(!('Notification' in window)) return;
+async function cancelNotification(evId){
+  if(isNative()){
+    try{
+      const { LocalNotifications } = window.Capacitor.Plugins;
+      await LocalNotifications.cancel({ notifications:[{ id: notifNumId(evId) }] });
+    }catch(e){}
+  } else {
+    if(S.cal.notifTimers?.[evId]){
+      clearTimeout(S.cal.notifTimers[evId]);
+      delete S.cal.notifTimers[evId];
+    }
+  }
+}
+
+async function scheduleAllNotifications(){
+  const granted=await requestNotifPermission();
+  if(!granted) return;
   const td=tds();
-  const endRange=ds(new Date(new Date().getFullYear(),new Date().getMonth()+1,0));
+  const endRange=ds(new Date(new Date().getFullYear(),new Date().getMonth()+2,0));
   const all=expandEvs(S.cal.evs, td, endRange);
-  all.forEach(ev=>scheduleNotification(ev));
+  for(const ev of all){ await scheduleNotification(ev); }
 }
 
 // ─────────────────────────
@@ -1609,10 +1643,7 @@ function scheduleAllNotifications(){
 load();
 renderCalendar();
 renderHabits();
-// Request notification permission and schedule all existing reminders
-requestNotifPermission().then(granted=>{
-  if(granted) scheduleAllNotifications();
-});
+scheduleAllNotifications();
 
 
 // ─────────────────────────
